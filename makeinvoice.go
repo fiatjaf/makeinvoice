@@ -23,6 +23,8 @@ type Params struct {
 	Msatoshi        int64
 	Description     string
 	DescriptionHash []byte
+
+	Label string // only used for c-lightning
 }
 
 type SparkoParams struct {
@@ -95,8 +97,12 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			desc = hexh
 		}
 
-		inv, err := spark.Call(method, params.Msatoshi,
-			"lightningaddr/"+strconv.FormatInt(time.Now().Unix(), 16), desc)
+		label := params.Label
+		if label == "" {
+			label = "makeinvoice/" + strconv.FormatInt(time.Now().Unix(), 16)
+		}
+
+		inv, err := spark.Call(method, params.Msatoshi, label, desc)
 		if err != nil {
 			return "", fmt.Errorf(method+" call failed: %w", err)
 		}
