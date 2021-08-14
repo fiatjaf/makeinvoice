@@ -16,6 +16,7 @@ import (
 	"time"
 
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
+	"github.com/lnpay/lnpay-go"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -57,6 +58,14 @@ type LNBitsParams struct {
 
 func (l LNBitsParams) getCert() string { return l.Cert }
 func (l LNBitsParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
+
+type LNPayParams struct {
+	PublicAccessKey  string
+	WalletInvoiceKey string
+}
+
+func (l LNPayParams) getCert() string { return "" }
+func (l LNPayParams) isTor() bool     { return false }
 
 type BackendParams interface {
 	getCert() string
@@ -152,11 +161,16 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		if err != nil {
 			return "", err
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode >= 300 {
-			return "", errors.New("call to lnd failed")
+			body, _ := ioutil.ReadAll(resp.Body)
+			text := string(body)
+			if len(text) > 300 {
+				text = text[:300]
+			}
+			return "", fmt.Errorf("call to lnd failed (%d): %s", resp.StatusCode, text)
 		}
 
-		defer resp.Body.Close()
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return "", err
@@ -188,8 +202,14 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		if err != nil {
 			return "", err
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode >= 300 {
-			return "", errors.New("call to lnbits failed")
+			body, _ := ioutil.ReadAll(resp.Body)
+			text := string(body)
+			if len(text) > 300 {
+				text = text[:300]
+			}
+			return "", fmt.Errorf("call to lnbits failed (%d): %s", resp.StatusCode, text)
 		}
 
 		defer resp.Body.Close()
@@ -199,6 +219,18 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		return gjson.ParseBytes(b).Get("payment_request").String(), nil
+	case LNPayParams:
+		client := lnpay.NewClient(backend.PublicAccessKey)
+		wallet := client.Wallet(backend.WalletInvoiceKey)
+		lntx, err := wallet.Invoice(lnpay.InvoiceParams{
+			NumSatoshis:     params.Msatoshi / 1000,
+			DescriptionHash: b64h,
+		})
+		if err != nil {
+			return "", fmt.Errorf("error creating invoice on lnpay: %w", err)
+		}
+
+		return lntx.PaymentRequest, nil
 	}
 
 	return "", errors.New("missing backend params")
