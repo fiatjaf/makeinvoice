@@ -10,13 +10,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
+
+var TorProxyURL = "socks5://127.0.0.1:9050"
 
 type Params struct {
 	Backend         BackendParams
@@ -33,7 +37,8 @@ type SparkoParams struct {
 	Key  string
 }
 
-func (l SparkoParams) GetCert() string { return l.Cert }
+func (l SparkoParams) getCert() string { return l.Cert }
+func (l SparkoParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type LNDParams struct {
 	Cert     string
@@ -41,7 +46,8 @@ type LNDParams struct {
 	Macaroon string
 }
 
-func (l LNDParams) GetCert() string { return l.Cert }
+func (l LNDParams) getCert() string { return l.Cert }
+func (l LNDParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type LNBitsParams struct {
 	Cert string
@@ -49,10 +55,12 @@ type LNBitsParams struct {
 	Key  string
 }
 
-func (l LNBitsParams) GetCert() string { return l.Cert }
+func (l LNBitsParams) getCert() string { return l.Cert }
+func (l LNBitsParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type BackendParams interface {
-	GetCert() string
+	getCert() string
+	isTor() bool
 }
 
 func MakeInvoice(params Params) (bolt11 string, err error) {
@@ -60,18 +68,27 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		http.DefaultClient.Transport = prevTransport
 	}(http.DefaultClient.Transport)
 
+	specialTransport := &http.Transport{}
+
 	// use a cert or skip TLS verification?
-	if params.Backend.GetCert() != "" {
+	if params.Backend.getCert() != "" {
 		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM([]byte(params.Backend.GetCert()))
-		http.DefaultClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{RootCAs: caCertPool},
-		}
+		caCertPool.AppendCertsFromPEM([]byte(params.Backend.getCert()))
+		specialTransport.TLSClientConfig = &tls.Config{RootCAs: caCertPool}
 	} else {
-		http.DefaultClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+		specialTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
+
+	// use a tor proxy?
+	if params.Backend.isTor() {
+		torURL, _ := url.Parse(TorProxyURL)
+		specialTransport.Proxy = http.ProxyURL(torURL)
+	}
+
+	http.DefaultClient.Transport = specialTransport
+
+	// set a timeout
+	http.DefaultClient.Timeout = 15 * time.Second
 
 	// description hash?
 	var hexh, b64h string
@@ -125,8 +142,13 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			return "", err
 		}
 
+		// macaroon must be hex, so if it is on base64 we adjust that
+		if b, err := base64.StdEncoding.DecodeString(backend.Macaroon); err == nil {
+			backend.Macaroon = hex.EncodeToString(b)
+		}
+
 		req.Header.Set("Grpc-Metadata-macaroon", backend.Macaroon)
-		resp, err := (&http.Client{Timeout: 25 * time.Second}).Do(req)
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -162,7 +184,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		req.Header.Set("X-Api-Key", backend.Key)
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := (&http.Client{Timeout: 25 * time.Second}).Do(req)
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return "", err
 		}
