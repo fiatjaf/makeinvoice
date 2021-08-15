@@ -181,6 +181,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 	case LNBitsParams:
 		body, _ := sjson.Set("{}", "amount", params.Msatoshi/1000)
 		body, _ = sjson.Set(body, "out", false)
+
 		if params.Description == "" {
 			body, _ = sjson.Set(body, "memo", "MakeInvoice")
 		} else {
