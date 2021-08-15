@@ -184,11 +184,11 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		if params.DescriptionHash == nil {
 			if params.Description == "" {
-				body, _ = sjson.Set(body, "memo", "MakeInvoice")
+				body, _ = sjson.Set(body, "memo", "created by makeinvoice")
 			} else {
 				body, _ = sjson.Set(body, "memo", params.Description)
 			}
-                } else {
+		} else {
 			body, _ = sjson.Set(body, "description_hash", hexh)
 		}
 
