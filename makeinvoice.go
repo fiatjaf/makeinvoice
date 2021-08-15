@@ -224,7 +224,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		wallet := client.Wallet(backend.WalletInvoiceKey)
 		lntx, err := wallet.Invoice(lnpay.InvoiceParams{
 			NumSatoshis:     params.Msatoshi / 1000,
-			DescriptionHash: b64h,
+			DescriptionHash: hexh,
 		})
 		if err != nil {
 			return "", fmt.Errorf("error creating invoice on lnpay: %w", err)
