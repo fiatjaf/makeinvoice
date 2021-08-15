@@ -185,8 +185,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			body, _ = sjson.Set(body, "memo", "MakeInvoice")
 		} else {
 			body, _ = sjson.Set(body, "memo", params.Description)
-                }
-
+		}
 
 		req, err := http.NewRequest("POST",
 			backend.Host+"/api/v1/payments",
