@@ -189,7 +189,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		req, err := http.NewRequest("POST",
-			backend.Host+"/v1/invoices",
+			backend.Host+"/api/v1/payments",
 			bytes.NewBufferString(body),
 		)
 		if err != nil {
