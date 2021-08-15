@@ -181,12 +181,12 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 	case LNBitsParams:
 		body, _ := sjson.Set("{}", "amount", params.Msatoshi/1000)
 		body, _ = sjson.Set(body, "out", false)
-
-		if params.DescriptionHash == nil {
-			body, _ = sjson.Set(body, "memo", params.Description)
+		if params.Description == nil {
+			body, _ = sjson.Set(body, "memo", "MakeInvoice")
 		} else {
-			body, _ = sjson.Set(body, "description_hash", b64h)
-		}
+			body, _ = sjson.Set(body, "memo", params.Description)
+                }
+
 
 		req, err := http.NewRequest("POST",
 			backend.Host+"/api/v1/payments",
