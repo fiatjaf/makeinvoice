@@ -183,13 +183,17 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		body, _ = sjson.Set(body, "out", false)
 
 		if params.DescriptionHash == nil {
-			body, _ = sjson.Set(body, "memo", params.Description)
+			if params.Description == "" {
+				body, _ = sjson.Set(body, "memo", "created by makeinvoice")
+			} else {
+				body, _ = sjson.Set(body, "memo", params.Description)
+			}
 		} else {
-			body, _ = sjson.Set(body, "description_hash", b64h)
+			body, _ = sjson.Set(body, "description_hash", hexh)
 		}
 
 		req, err := http.NewRequest("POST",
-			backend.Host+"/v1/invoices",
+			backend.Host+"/api/v1/payments",
 			bytes.NewBufferString(body),
 		)
 		if err != nil {
