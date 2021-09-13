@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fiatjaf/eclair-go"
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/lnpay/lnpay-go"
 	"github.com/tidwall/gjson"
@@ -66,6 +67,15 @@ type LNPayParams struct {
 
 func (l LNPayParams) getCert() string { return "" }
 func (l LNPayParams) isTor() bool     { return false }
+
+type EclairParams struct {
+	Host     string
+	Password string
+	Cert     string
+}
+
+func (l EclairParams) getCert() string { return l.Cert }
+func (l EclairParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type BackendParams interface {
 	getCert() string
@@ -228,6 +238,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		wallet := client.Wallet(backend.WalletInvoiceKey)
 		lntx, err := wallet.Invoice(lnpay.InvoiceParams{
 			NumSatoshis:     params.Msatoshi / 1000,
+			Memo:            params.Description,
 			DescriptionHash: hexh,
 		})
 		if err != nil {
@@ -235,6 +246,22 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		return lntx.PaymentRequest, nil
+	case EclairParams:
+		client := eclair.Client{Host: backend.Host, Password: backend.Password}
+		eclairParams := eclair.Params{"amountMsat": params.Msatoshi}
+
+		if 0 < len(params.DescriptionHash) {
+			eclairParams["descriptionHash"] = hexh
+		} else {
+			eclairParams["description"] = params.Description
+		}
+
+		inv, err := client.Call("createinvoice", eclairParams)
+		if err != nil {
+			return "", fmt.Errorf("error creating invoice on eclair: %w", err)
+		}
+
+		return inv.Get("serialized").String(), nil
 	}
 
 	return "", errors.New("missing backend params")
