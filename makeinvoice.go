@@ -23,6 +23,9 @@ import (
 )
 
 var TorProxyURL = "socks5://127.0.0.1:9050"
+var Client = &http.Client{
+	Timeout: 10 * time.Second,
+}
 
 type Params struct {
 	Backend         BackendParams
@@ -84,8 +87,8 @@ type BackendParams interface {
 
 func MakeInvoice(params Params) (bolt11 string, err error) {
 	defer func(prevTransport http.RoundTripper) {
-		http.DefaultClient.Transport = prevTransport
-	}(http.DefaultClient.Transport)
+		Client.Transport = prevTransport
+	}(Client.Transport)
 
 	specialTransport := &http.Transport{}
 
@@ -104,10 +107,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		specialTransport.Proxy = http.ProxyURL(torURL)
 	}
 
-	http.DefaultClient.Transport = specialTransport
-
-	// set a timeout
-	http.DefaultClient.Timeout = 15 * time.Second
+	Client.Transport = specialTransport
 
 	// description hash?
 	var hexh, b64h string
@@ -167,7 +167,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		req.Header.Set("Grpc-Metadata-macaroon", backend.Macaroon)
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := Client.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -212,7 +212,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		req.Header.Set("X-Api-Key", backend.Key)
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := Client.Do(req)
 		if err != nil {
 			return "", err
 		}
