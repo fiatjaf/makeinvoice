@@ -33,7 +33,8 @@ type Params struct {
 	Description     string
 	DescriptionHash []byte
 
-	Label string // only used for c-lightning
+	Label    string // only used for c-lightning
+	Username string // only used for strike
 }
 
 type SparkoParams struct {
@@ -79,6 +80,16 @@ type EclairParams struct {
 
 func (l EclairParams) getCert() string { return l.Cert }
 func (l EclairParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
+
+type StrikeParams struct {
+	Cert     string
+	Host     string
+	Key      string
+	Username string
+}
+
+func (l StrikeParams) getCert() string { return l.Cert }
+func (l StrikeParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type BackendParams interface {
 	getCert() string
@@ -262,6 +273,79 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		return inv.Get("serialized").String(), nil
+	case StrikeParams:
+		url := "https://api.strike.me/v1/invoices/handle/" + params.Username
+		method := "POST"
+		invoiceDescription := "created by makeinvoice"
+		if params.Description != "" {
+			invoiceDescription = params.Description
+		}
+		btcValue := float32(params.Msatoshi) / 100000000000
+		payload := strings.NewReader(fmt.Sprintf(`{
+		"description": "%s",
+		"amount": {
+			"currency": "USD",
+			"amount": "%.8f"
+		}
+		}`, invoiceDescription, btcValue))
+		// TODO: BTC currency does not seem to be supported at the moment.
+
+		client := &http.Client{}
+		req, err := http.NewRequest(method, url, payload)
+
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Accept", "application/json")
+		req.Header.Add("Authorization", "Bearer "+backend.Key)
+
+		res, err := client.Do(req)
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+		defer res.Body.Close()
+
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+
+		invoiceId := gjson.ParseBytes(body).Get("invoiceId").String()
+
+		// got strike invoice - get actual LN invoice now. sigh.
+		url = "https://api.strike.me/v1/invoices/" + invoiceId + "/quote"
+		req, err = http.NewRequest(method, url, payload)
+
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Accept", "application/json")
+		req.Header.Add("Authorization", "Bearer "+backend.Key)
+
+		res, err = client.Do(req)
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+		defer res.Body.Close()
+
+		body, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+
+		lnInvoice := gjson.ParseBytes(body).Get("lnInvoice").String()
+		// println("lnInvoice ", lnInvoice)
+
+		return lnInvoice, nil
+
 	}
 
 	return "", errors.New("missing backend params")
