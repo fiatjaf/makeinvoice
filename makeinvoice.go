@@ -35,6 +35,7 @@ type Params struct {
 
 	Label    string // only used for c-lightning
 	Username string // only used for strike
+	Currency string // only used for strike
 }
 
 type SparkoParams struct {
@@ -82,10 +83,9 @@ func (l EclairParams) getCert() string { return l.Cert }
 func (l EclairParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type StrikeParams struct {
-	Cert     string
-	Host     string
-	Key      string
-	Username string
+	Cert string
+	Host string
+	Key  string
 }
 
 func (l StrikeParams) getCert() string { return l.Cert }
@@ -284,11 +284,13 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		payload := strings.NewReader(fmt.Sprintf(`{
 		"description": "%s",
 		"amount": {
-			"currency": "USD",
+			"currency": "%s",
 			"amount": "%.8f"
 		}
-		}`, invoiceDescription, btcValue))
-		// TODO: BTC currency does not seem to be supported at the moment.
+		}`, invoiceDescription, params.Currency, btcValue))
+		// TODO: BTC currency does not seem to be supported at the moment
+		// Currently the currency needs to be the user's base currency (USD for the US, USDT for El Sal and Argentina).
+		// However, we're going to enable BTC invoices in the coming weeks.
 
 		client := &http.Client{}
 		req, err := http.NewRequest(method, url, payload)
