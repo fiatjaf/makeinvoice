@@ -274,7 +274,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		return inv.Get("serialized").String(), nil
 	case StrikeParams:
 		strikeApiUrl := "https://api.strike.me"
-		url := strikeApiUrl + "/v1/invoices/handle/" + params.Username
+		url := strikeApiUrl + "/v1/invoices/handle/" + backend.Username
 		method := "POST"
 		invoiceDescription := "created by makeinvoice"
 		if params.Description != "" {
@@ -287,7 +287,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			"currency": "%s",
 			"amount": "%.8f"
 		}
-		}`, invoiceDescription, params.Currency, btcValue))
+		}`, invoiceDescription, backend.Currency, btcValue))
 		// TODO: BTC currency does not seem to be supported at the moment
 		// Currently the currency needs to be the user's base currency (USD for the US, USDT for El Sal and Argentina).
 		// However, we're going to enable BTC invoices in the coming weeks.
