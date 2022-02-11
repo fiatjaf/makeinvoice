@@ -33,9 +33,7 @@ type Params struct {
 	Description     string
 	DescriptionHash []byte
 
-	Label    string // only used for c-lightning
-	Username string // only used for strike
-	Currency string // only used for strike
+	Label string // only used for c-lightning
 }
 
 type SparkoParams struct {
@@ -83,13 +81,14 @@ func (l EclairParams) getCert() string { return l.Cert }
 func (l EclairParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type StrikeParams struct {
-	Cert string
-	Host string
-	Key  string
+	Key      string
+	Username string
+	Currency string
 }
 
-func (l StrikeParams) getCert() string { return l.Cert }
-func (l StrikeParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
+// not implemented
+func (l StrikeParams) getCert() string { return "" }
+func (l StrikeParams) isTor() bool     { return false }
 
 type BackendParams interface {
 	getCert() string
