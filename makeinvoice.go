@@ -274,7 +274,8 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		return inv.Get("serialized").String(), nil
 	case StrikeParams:
-		url := "https://api.strike.me/v1/invoices/handle/" + params.Username
+		strikeApiUrl := "https://api.strike.me"
+		url := strikeApiUrl + "/v1/invoices/handle/" + params.Username
 		method := "POST"
 		invoiceDescription := "created by makeinvoice"
 		if params.Description != "" {
@@ -319,7 +320,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		invoiceId := gjson.ParseBytes(body).Get("invoiceId").String()
 
 		// got strike invoice - get actual LN invoice now. sigh.
-		url = "https://api.strike.me/v1/invoices/" + invoiceId + "/quote"
+		url = strikeApiUrl + "/v1/invoices/" + invoiceId + "/quote"
 		req, err = http.NewRequest(method, url, payload)
 
 		if err != nil {
