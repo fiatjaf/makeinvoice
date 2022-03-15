@@ -312,7 +312,6 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			"https://api.strike.me/v1/invoices/handle/"+backend.Username, jpayload)
 
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 		req.Header.Add("Content-Type", "application/json")
@@ -321,14 +320,12 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		res, err := client.Do(req)
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 		defer res.Body.Close()
 
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 
@@ -339,7 +336,6 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			"https://api.strike.me/v1/invoices/"+invoiceId+"/quote", jpayload)
 
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 		req.Header.Add("Content-Type", "application/json")
@@ -348,14 +344,12 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		res, err = client.Do(req)
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 		defer res.Body.Close()
 
 		body, err = ioutil.ReadAll(res.Body)
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 
@@ -369,7 +363,6 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		err := ln.ConnectAndInit(backend.Host, backend.NodeId)
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 		defer ln.Disconnect()
@@ -384,7 +377,6 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		body, err := ln.Rpc(backend.Rune, "invoice", params)
 		if err != nil {
-			fmt.Println(err)
 			return "", err
 		}
 
