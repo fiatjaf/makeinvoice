@@ -17,6 +17,7 @@ import (
 
 	"github.com/fiatjaf/eclair-go"
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
+	"github.com/jb55/lnsocket/go"
 	"github.com/lnpay/lnpay-go"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -35,6 +36,15 @@ type Params struct {
 
 	Label string // only used for c-lightning
 }
+
+type CommandoParams struct {
+	Rune   string
+	Host   string
+	NodeId string
+}
+
+func (l CommandoParams) getCert() string { return "" }
+func (l CommandoParams) isTor() bool     { return strings.Index(l.Host, ".onion") != -1 }
 
 type SparkoParams struct {
 	Cert string
@@ -145,7 +155,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		label := params.Label
 		if label == "" {
-			label = "makeinvoice/" + strconv.FormatInt(time.Now().Unix(), 16)
+			label = makeRandomLabel()
 		}
 
 		inv, err := spark.Call(method, params.Msatoshi, label, desc)
@@ -348,7 +358,52 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		return lnInvoice, nil
 
+	case CommandoParams:
+		ln := lnsocket.LNSocket{}
+		ln.GenKey()
+
+		err := ln.ConnectAndInit(backend.Host, backend.NodeId)
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+		defer ln.Disconnect()
+
+		label := params.Label
+		if label == "" {
+			label = makeRandomLabel()
+		}
+
+		params := fmt.Sprintf("[\"%dmsat\", \"%s\", \"%s\"]",
+			params.Msatoshi, label, params.Description)
+
+		body, err := ln.Rpc(backend.Rune, "invoice", params)
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
+
+		resErr := gjson.Get(body, "error")
+		if resErr.Type != gjson.Null {
+			if resErr.Type == gjson.JSON {
+				return "", errors.New(resErr.Get("message").String())
+			} else if resErr.Type == gjson.String {
+				return "", errors.New(resErr.String())
+			}
+			return "", fmt.Errorf("Unknown commando error: '%v'", resErr)
+		}
+
+		invoice := gjson.Get(body, "result.bolt11")
+		if invoice.Type != gjson.String {
+			return "", fmt.Errorf("No bolt11 result found in invoice response, got %v", body)
+		}
+
+		return invoice.String(), nil
 	}
 
 	return "", errors.New("missing backend params")
+}
+
+func makeRandomLabel() string {
+	return "makeinvoice/" + strconv.FormatInt(time.Now().Unix(), 16)
 }

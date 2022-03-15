@@ -3,7 +3,7 @@ makeinvoice
 
 A simple function capable of generating an invoice in multiple Lightning backends.
 
-Currently supports Sparko, LND REST, LNbits, LNPay and Eclair.
+Currently supports Sparko, LND REST, LNbits, LNPay, Eclair and Commando.
 
 ## Usage
 
