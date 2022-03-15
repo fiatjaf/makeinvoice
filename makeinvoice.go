@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -17,7 +18,7 @@ import (
 
 	"github.com/fiatjaf/eclair-go"
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
-	"github.com/jb55/lnsocket/go"
+	lnsocket "github.com/jb55/lnsocket/go"
 	"github.com/lnpay/lnpay-go"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -96,7 +97,6 @@ type StrikeParams struct {
 	Currency string
 }
 
-// not implemented
 func (l StrikeParams) getCert() string { return "" }
 func (l StrikeParams) isTor() bool     { return false }
 
@@ -253,6 +253,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		return gjson.ParseBytes(b).Get("payment_request").String(), nil
+
 	case LNPayParams:
 		client := lnpay.NewClient(backend.PublicAccessKey)
 		wallet := client.Wallet(backend.WalletInvoiceKey)
@@ -266,6 +267,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		return lntx.PaymentRequest, nil
+
 	case EclairParams:
 		client := eclair.Client{Host: backend.Host, Password: backend.Password}
 		eclairParams := eclair.Params{"amountMsat": params.Msatoshi}
@@ -282,28 +284,32 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		return inv.Get("serialized").String(), nil
+
 	case StrikeParams:
-		strikeApiUrl := "https://api.strike.me"
-		url := strikeApiUrl + "/v1/invoices/handle/" + backend.Username
-		method := "POST"
-		invoiceDescription := "created by makeinvoice"
+		payload := struct {
+			Description string `json:"description"`
+			Amount      struct {
+				Currency string `json:"currency"`
+				Amount   string `json:"amount"`
+			} `json:"amount"`
+		}{}
+
+		payload.Description = "created by makeinvoice"
 		if params.Description != "" {
-			invoiceDescription = params.Description
+			payload.Description = params.Description
 		}
-		btcValue := float32(params.Msatoshi) / 100000000000
-		payload := strings.NewReader(fmt.Sprintf(`{
-		"description": "%s",
-		"amount": {
-			"currency": "%s",
-			"amount": "%.8f"
-		}
-		}`, invoiceDescription, backend.Currency, btcValue))
-		// TODO: BTC currency does not seem to be supported at the moment
-		// Currently the currency needs to be the user's base currency (USD for the US, USDT for El Sal and Argentina).
-		// However, we're going to enable BTC invoices in the coming weeks.
+
+		// TODO: BTC currency does not seem to be supported at the moment Currently the currency needs to be the user's base currency (USD for the US, USDT for El Sal and Argentina). However, we're going to enable BTC invoices in the coming weeks.
+		payload.Amount.Currency = backend.Currency
+		payload.Amount.Amount = fmt.Sprintf("%.8f",
+			float32(params.Msatoshi)/100000000000)
+
+		jpayload := &bytes.Buffer{}
+		json.NewEncoder(jpayload).Encode(payload)
 
 		client := &http.Client{}
-		req, err := http.NewRequest(method, url, payload)
+		req, err := http.NewRequest("POST",
+			"https://api.strike.me/v1/invoices/handle/"+backend.Username, jpayload)
 
 		if err != nil {
 			fmt.Println(err)
@@ -329,8 +335,8 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		invoiceId := gjson.ParseBytes(body).Get("invoiceId").String()
 
 		// got strike invoice - get actual LN invoice now. sigh.
-		url = strikeApiUrl + "/v1/invoices/" + invoiceId + "/quote"
-		req, err = http.NewRequest(method, url, payload)
+		req, err = http.NewRequest("POST",
+			"https://api.strike.me/v1/invoices/"+invoiceId+"/quote", jpayload)
 
 		if err != nil {
 			fmt.Println(err)
@@ -354,7 +360,6 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		lnInvoice := gjson.ParseBytes(body).Get("lnInvoice").String()
-		// println("lnInvoice ", lnInvoice)
 
 		return lnInvoice, nil
 
