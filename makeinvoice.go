@@ -145,7 +145,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 		label := params.Label
 		if label == "" {
-			label = "makeinvoice/" + strconv.FormatInt(time.Now().Unix(), 16)
+			label = makeRandomLabel()
 		}
 
 		inv, err := spark.Call(method, params.Msatoshi, label, desc)
@@ -351,4 +351,8 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 	}
 
 	return "", errors.New("missing backend params")
+}
+
+func makeRandomLabel() string {
+	return "makeinvoice/" + strconv.FormatInt(time.Now().Unix(), 16)
 }
