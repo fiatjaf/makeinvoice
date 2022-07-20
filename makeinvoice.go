@@ -2,6 +2,7 @@ package makeinvoice
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -24,16 +25,21 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-var TorProxyURL = "socks5://127.0.0.1:9050"
-var Client = &http.Client{
-	Timeout: 10 * time.Second,
-}
+var (
+	TorProxyURL = "socks5://127.0.0.1:9050"
+	Client      = &http.Client{
+		Timeout: 10 * time.Second,
+	}
+)
 
 type Params struct {
-	Backend         BackendParams
-	Msatoshi        int64
-	Description     string
-	DescriptionHash []byte
+	Backend     BackendParams
+	Msatoshi    int64
+	Description string
+
+	// setting this to true will cause .Description to be hashed and used as
+	// the description_hash (h) field on the bolt11 invoice
+	UseDescriptionHash bool
 
 	Label string // only used for c-lightning
 }
@@ -131,9 +137,10 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 
 	// description hash?
 	var hexh, b64h string
-	if params.DescriptionHash != nil {
-		hexh = hex.EncodeToString(params.DescriptionHash)
-		b64h = base64.StdEncoding.EncodeToString(params.DescriptionHash)
+	if params.UseDescriptionHash {
+		descriptionHash := sha256.Sum256([]byte(params.Description))
+		hexh = hex.EncodeToString(descriptionHash[:])
+		b64h = base64.StdEncoding.EncodeToString(descriptionHash[:])
 	}
 
 	switch backend := params.Backend.(type) {
@@ -145,12 +152,12 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		var method, desc string
-		if params.DescriptionHash == nil {
-			method = "invoice"
-			desc = params.Description
-		} else {
+		if params.UseDescriptionHash {
 			method = "invoicewithdescriptionhash"
 			desc = hexh
+		} else {
+			method = "invoice"
+			desc = params.Description
 		}
 
 		label := params.Label
@@ -167,10 +174,10 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 	case LNDParams:
 		body, _ := sjson.Set("{}", "value_msat", params.Msatoshi)
 
-		if params.DescriptionHash == nil {
-			body, _ = sjson.Set(body, "memo", params.Description)
-		} else {
+		if params.UseDescriptionHash {
 			body, _ = sjson.Set(body, "description_hash", b64h)
+		} else {
+			body, _ = sjson.Set(body, "memo", params.Description)
 		}
 
 		req, err := http.NewRequest("POST",
@@ -212,14 +219,14 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		body, _ := sjson.Set("{}", "amount", params.Msatoshi/1000)
 		body, _ = sjson.Set(body, "out", false)
 
-		if params.DescriptionHash == nil {
+		if params.UseDescriptionHash {
+			body, _ = sjson.Set(body, "description_hash", hexh)
+		} else {
 			if params.Description == "" {
 				body, _ = sjson.Set(body, "memo", "created by makeinvoice")
 			} else {
 				body, _ = sjson.Set(body, "memo", params.Description)
 			}
-		} else {
-			body, _ = sjson.Set(body, "description_hash", hexh)
 		}
 
 		req, err := http.NewRequest("POST",
@@ -272,7 +279,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		client := eclair.Client{Host: backend.Host, Password: backend.Password}
 		eclairParams := eclair.Params{"amountMsat": params.Msatoshi}
 
-		if 0 < len(params.DescriptionHash) {
+		if params.UseDescriptionHash {
 			eclairParams["descriptionHash"] = hexh
 		} else {
 			eclairParams["description"] = params.Description
@@ -310,7 +317,6 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		client := &http.Client{}
 		req, err := http.NewRequest("POST",
 			"https://api.strike.me/v1/invoices/handle/"+backend.Username, jpayload)
-
 		if err != nil {
 			return "", err
 		}
@@ -372,10 +378,17 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			label = makeRandomLabel()
 		}
 
-		params := fmt.Sprintf("[\"%dmsat\", \"%s\", \"%s\"]",
-			params.Msatoshi, label, params.Description)
+		invoiceParams := map[string]interface{}{
+			"msatoshi":    params.Msatoshi,
+			"label":       label,
+			"description": params.Description,
+		}
+		if params.UseDescriptionHash {
+			invoiceParams["deschashonly"] = true
+		}
+		jparams, _ := json.Marshal(invoiceParams)
 
-		body, err := ln.Rpc(backend.Rune, "invoice", params)
+		body, err := ln.Rpc(backend.Rune, "invoice", string(jparams))
 		if err != nil {
 			return "", err
 		}
