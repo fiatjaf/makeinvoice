@@ -379,7 +379,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		invoiceParams := map[string]interface{}{
-			"msatoshi":    params.Msatoshi,
+			"amount_msat": params.Msatoshi,
 			"label":       label,
 			"description": params.Description,
 		}
