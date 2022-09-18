@@ -220,7 +220,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		body, _ = sjson.Set(body, "out", false)
 
 		if params.UseDescriptionHash {
-			body, _ = sjson.Set(body, "unhashed_description", params.Description)
+			body, _ = sjson.Set(body, "unhashed_description", hex.EncodeToString([]byte(params.Description)))
 		} else {
 			if params.Description == "" {
 				body, _ = sjson.Set(body, "memo", "created by makeinvoice")
