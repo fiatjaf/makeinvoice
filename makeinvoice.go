@@ -66,6 +66,7 @@ type LNDParams struct {
 	Cert     string
 	Host     string
 	Macaroon string
+	Private  bool
 }
 
 func (l LNDParams) getCert() string { return l.Cert }
@@ -178,7 +179,9 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		} else {
 			body, _ = sjson.Set(body, "memo", params.Description)
 		}
-		body, _ = sjson.Set(body, "private", true)
+		if backend.Private {
+			body, _ = sjson.Set(body, "private", true)
+		}
 
 		req, err := http.NewRequest("POST",
 			backend.Host+"/v1/invoices",
