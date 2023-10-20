@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -200,7 +200,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode >= 300 {
-			body, _ := ioutil.ReadAll(resp.Body)
+			body, _ := io.ReadAll(resp.Body)
 			text := string(body)
 			if len(text) > 300 {
 				text = text[:300]
@@ -208,7 +208,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 			return "", fmt.Errorf("call to lnd failed (%d): %s", resp.StatusCode, text)
 		}
 
-		b, err := ioutil.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return "", err
 		}
@@ -245,7 +245,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode >= 300 {
-			body, _ := ioutil.ReadAll(resp.Body)
+			body, _ := io.ReadAll(resp.Body)
 			text := string(body)
 			if len(text) > 300 {
 				text = text[:300]
@@ -254,7 +254,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 
 		defer resp.Body.Close()
-		b, err := ioutil.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return "", err
 		}
@@ -330,7 +330,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 		defer res.Body.Close()
 
-		body, err := ioutil.ReadAll(res.Body)
+		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			return "", err
 		}
@@ -354,7 +354,7 @@ func MakeInvoice(params Params) (bolt11 string, err error) {
 		}
 		defer res.Body.Close()
 
-		body, err = ioutil.ReadAll(res.Body)
+		body, err = io.ReadAll(res.Body)
 		if err != nil {
 			return "", err
 		}
